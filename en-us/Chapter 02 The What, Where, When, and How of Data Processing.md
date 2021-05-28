@@ -1,4 +1,5 @@
 # Chapter 2. The What, Where, When, and How of Data Processing
+
 Okay party people, it’s time to get concrete!
 
 Chapter 1 focused on three main areas: terminology, defining precisely what I mean when I use overloaded terms like “streaming”; batch versus streaming, comparing the theoretical capabilities of the two types of systems, and postulating that only two things are necessary to take streaming systems beyond their batch counterparts: correctness and tools for reasoning about time; and data processing patterns, looking at the conceptual approaches taken with both batch and streaming systems when processing bounded and unbounded data.
@@ -10,6 +11,7 @@ To give you a sense of what things look like in action, I use snippets of Apache
 I use Apache Beam here for examples not because this is a Beam book (it’s not), but because it most completely embodies the concepts described in this book. Back when “Streaming 102” was originally written (back when it was still the Dataflow Model from Google Cloud Dataflow and not the Beam Model from Apache Beam), it was literally the only system in existence that provided the amount of expressiveness necessary for all the examples we’ll cover here. A year and a half later, I’m happy to say much has changed, and most of the major systems out there have moved or are moving toward supporting a model that looks a lot like the one described in this book. So rest assured that the concepts we cover here, though informed through the Beam lens, as it were, will apply equally across most other systems you’ll come across.
 
 ## Roadmap
+
 To help set the stage for this chapter, I want to lay out the five main concepts that will underpin all of the discussions therein, and really, for most of the rest of Part I. We’ve already covered two of them.
 
 In Chapter 1, I first established the critical distinction between event time (the time that events happen) and processing time (the time they are observed during processing). This provides the foundation for one of the main theses put forth in this book: if you care about both correctness and the context within which events actually occurred, you must analyze data relative to their inherent event times, not the processing time at which they are encountered during the analysis itself.
@@ -170,11 +172,15 @@ Completeness triggers are less frequently encountered, but provide streaming sem
 
 But first, let’s start simple and look at some basic repeated update triggers in action. To make the notion of triggers a bit more concrete, let’s go ahead and add the most straightforward type of trigger to our example pipeline: a trigger that fires with every new record, as shown in Example 2-3.
 
-Example 2-3. Triggering repeatedly with every record
-PCollection<KV<Team, Integer>> totals = input
-  .apply(Window.into(FixedWindows.of(TWO_MINUTES))
-                .triggering(Repeatedly(AfterCount(1))));
-  .apply(Sum.integersPerKey());
+>  Example 2-3. Triggering repeatedly with every record
+>
+>```java
+>PCollection<KV<Team, Integer>> totals = input
+>  .apply(Window.into(FixedWindows.of(TWO_MINUTES))
+>                .triggering(Repeatedly(AfterCount(1))));
+>  .apply(Sum.integersPerKey());
+>```
+
 If we were to run this new pipeline on a streaming engine, the results would look something like that shown in Figure 2-6.
 
 ![image-20210331135333979](Chapter 02 The What, Where, When, and How of Data Processing.assets/image-20210331135333979.png)
@@ -186,13 +192,18 @@ One downside of per-record triggering is that it’s quite chatty. When processi
 
 There are two different approaches to processing-time delays in triggers: aligned delays (where the delay slices up processing time into fixed regions that align across keys and windows) and unaligned delays (where the delay is relative to the data observed within a given window). A pipeline with unaligned delays might look like Example 2-4, the results of which are shown in Figure 2-7.
 
-Example 2-4. Triggering on aligned two-minute processing-time boundaries
-PCollection<KV<Team, Integer>> totals = input
-  .apply(Window.into(FixedWindows.of(TWO_MINUTES))
-               .triggering(Repeatedly(AlignedDelay(TWO_MINUTES)))
-  .apply(Sum.integersPerKey());
+> Example 2-4. Triggering on aligned two-minute processing-time boundaries
+>
+> ```java
+> PCollection<KV<Team, Integer>> totals = input
+>   .apply(Window.into(FixedWindows.of(TWO_MINUTES))
+>                .triggering(Repeatedly(AlignedDelay(TWO_MINUTES)))
+>   .apply(Sum.integersPerKey());
+> ```
+>
+> 
 
-![image-20210331135349080](Chapter 02 The What, Where, When, and How of Data Processing.assets/image-20210331135349080.png)
+![Figure 2-7. Two-minute aligned delay triggers (i.e., microbatching)](Chapter 02 The What, Where, When, and How of Data Processing.assets/image-20210331135349080.png)
 
 Figure 2-7. Two-minute aligned delay triggers (i.e., microbatching)
 This sort of aligned delay trigger is effectively what you get from a microbatch streaming system like Spark Streaming. The nice thing about it is predictability; you get regular updates across all modified windows at the same time. That’s also the downside: all updates happen at once, which results in bursty workloads that often require greater peak provisioning to properly handle the load. The alternative is to use an unaligned delay. That would look something Example 2-5 in Beam. Figure 2-8 presents the results.
@@ -305,15 +316,19 @@ In contrast, some systems may use the term “watermark” to mean other things.
 
 Because the interaction between allowed lateness and the watermark is a little subtle, it’s worth looking at an example. Let’s take the heuristic watermark pipeline from Example 2-7/Figure 2-11 and add in Example 2-8 a lateness horizon of one minute (note that this particular horizon has been chosen strictly because it fits nicely into the diagram; for real-world use cases, a larger horizon would likely be much more practical):
 
-Example 2-8. Early/on-time/late firings with allowed lateness
-PCollection<KV<Team, Integer>> totals = input
-  .apply(Window.into(FixedWindows.of(TWO_MINUTES))
-               .triggering(
-                 AfterWatermark()
-                   .withEarlyFirings(AlignedDelay(ONE_MINUTE))
-                   .withLateFirings(AfterCount(1)))
-               .withAllowedLateness(ONE_MINUTE))
- .apply(Sum.integersPerKey());
+> Example 2-8. Early/on-time/late firings with allowed lateness
+>
+> ```java
+> PCollection<KV<Team, Integer>> totals = input
+>   .apply(Window.into(FixedWindows.of(TWO_MINUTES))
+>                .triggering(
+>                  AfterWatermark()
+>                    .withEarlyFirings(AlignedDelay(ONE_MINUTE))
+>                    .withLateFirings(AfterCount(1)))
+>                .withAllowedLateness(ONE_MINUTE))
+>  .apply(Sum.integersPerKey());
+> ```
+
 The execution of this pipeline would look something like Figure 2-12, in which I’ve added the following features to highlight the effects of allowed lateness:
 
 The thick black line denoting the current position in processing time is now annotated with ticks indicating the lateness horizon (in event time) for all active windows.
